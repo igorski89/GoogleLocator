@@ -11,6 +11,13 @@
 
 @implementation AppDelegate
 
+-(void)awakeFromNib {
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"googlemaps" withExtension:@"html"];
+    [[googleMapsWebView mainFrame] loadRequest:[NSURLRequest requestWithURL:url]];
+    [[[googleMapsWebView mainFrame] frameView] setAllowsScrolling:NO];
+    [googleMapsWebView setNeedsDisplay:YES];    
+}
+
 - (BOOL)windowShouldClose:(id)window {
     [[NSApplication sharedApplication] hide:nil];
     return NO;
@@ -32,7 +39,9 @@
     
     NSString *urlString = [NSString stringWithFormat:@"http://maps.google.com/maps/geo?q=%@&output=csv", 
                            [address stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
-    NSString *locationString = [NSString stringWithContentsOfURL:[NSURL URLWithString:urlString]];
+    NSData *urlData = [NSData dataWithContentsOfURL:[NSURL URLWithString:urlString]];
+    NSString *locationString = [[[NSString alloc] initWithData:urlData encoding:NSUTF8StringEncoding] autorelease];
+    //NSLog(@"%@",locationString);
 	NSArray *listItems = [locationString componentsSeparatedByString:@","];    
     
     NSLog(@"coordinates for address %@:%@",address,listItems);
@@ -42,6 +51,39 @@
                         waitUntilDone:YES];
     
     [pool release];
+}
+
+- (IBAction)zoomButtonPressed:(id)sender {
+    if (sender == mapZoomSegmentedControl) {
+        if ([mapZoomSegmentedControl selectedSegment] == 0) {
+            id map = [googleMapsWebView windowScriptObject];
+            NSString *jsCmd = @"map.zoomIn();";
+            [map evaluateWebScript:jsCmd];
+        }
+        else {
+            id map = [googleMapsWebView windowScriptObject];
+            NSString *jsCmd = @"map.zoomOut();";
+            [map evaluateWebScript:jsCmd];
+        }
+    }
+}
+
+- (IBAction)mapModeSegmentedControlSelectedChanged:(id)sender {
+    if (sender == mapModeSegmentedControl) {
+        id map = [googleMapsWebView windowScriptObject];
+        NSString *mapType = nil;
+        if ([mapModeSegmentedControl selectedSegment] == 0) {
+            mapType = @"G_NORMAL_MAP";
+        }
+        else if ([mapModeSegmentedControl selectedSegment] == 1) {
+            mapType = @"G_SATELLITE_MAP";
+        }
+        else {
+            mapType = @"G_HYBRID_MAP";
+        }
+        NSString *jsCmd = [NSString stringWithFormat:@"map.setMapType(%@);",mapType];
+        [map evaluateWebScript:jsCmd];
+    }
 }
 
 - (void)setCoordinatesFromGoogleCSV:(NSArray*)coordinates {
@@ -54,7 +96,14 @@
 	} else {
         [latitudeTextField setStringValue:@""];
         [longitudeTextField setStringValue:@""];
-    }    
+    }
+    NSMutableString *jsCmd = [NSMutableString string];
+    [jsCmd appendString:@"map.clearOverlays();"];
+    [jsCmd appendFormat:@"map.setCenter(new GLatLng(%@, %@), 13);",[coordinates objectAtIndex:2],[coordinates objectAtIndex:3]];
+    [jsCmd appendFormat:@"map.addOverlay(new GMarker(new GLatLng(%@,%@)));",[coordinates objectAtIndex:2],[coordinates objectAtIndex:3]];
+    
+    id map = [googleMapsWebView windowScriptObject];
+    [map evaluateWebScript:jsCmd];
 }
 
 @end
